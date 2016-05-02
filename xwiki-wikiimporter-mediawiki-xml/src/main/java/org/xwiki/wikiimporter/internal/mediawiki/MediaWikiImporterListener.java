@@ -55,6 +55,10 @@ public class MediaWikiImporterListener extends AbstractWikiImporterListenerXDOM
 
     private MediaWikiPageRevision currentPageRevision;
 
+    private String currentId;
+
+    private String currentMediaWikiContent;
+
     private MediaWikiImportParameters importParams;
 
     private List<String> attachments = new ArrayList<String>();
@@ -71,6 +75,7 @@ public class MediaWikiImporterListener extends AbstractWikiImporterListenerXDOM
         this.logger = componentManager.lookup(WikiImporterLogger.class);
         this.docBridge = componentManager.lookup(WikiImporterDocumentBridge.class);
         this.importParams = params;
+        this.currentMediaWikiContent = "";
     }
 
     private void newXDOMGeneratorListener()
@@ -126,6 +131,14 @@ public class MediaWikiImporterListener extends AbstractWikiImporterListenerXDOM
         return null;
     }
 
+    public void setCurrentMediaWikiContent(String currentContent) {
+        this.currentMediaWikiContent = currentContent;
+    }
+
+    public String getCurrentMediaWikiContent() {
+        return this.currentMediaWikiContent;
+    }
+
     /**
      * {@inheritDoc}
      * 
@@ -133,6 +146,7 @@ public class MediaWikiImporterListener extends AbstractWikiImporterListenerXDOM
      */
     public void beginAttachment(String attachmentName)
     {
+        System.out.println("Adding attachment " + attachmentName + " to page " + this.currentPage.getName());
         this.currentPage.addAttachment(new MediaWikiAttachment(this.importParams.getAttachmentSrcPath(),
             attachmentName, this.importParams.getAttachmentExcludeDirs(), this.logger));
         endAttachment();
@@ -146,6 +160,7 @@ public class MediaWikiImporterListener extends AbstractWikiImporterListenerXDOM
     public void beginObject(String objectType)
     {
         // TODO
+        System.out.println("beginObject: " + objectType);
     }
 
     /**
@@ -159,6 +174,7 @@ public class MediaWikiImporterListener extends AbstractWikiImporterListenerXDOM
         this.currentPage = new MediaWikiPage(this.importParams.getDefaultSpace());
         this.currentPageRevision = new MediaWikiPageRevision();
         this.currentPage.addRevision(this.currentPageRevision);
+        this.currentId = null;
         this.logger.nextPage();
         newXDOMGeneratorListener();
         this.attachments.clear();
@@ -176,6 +192,8 @@ public class MediaWikiImporterListener extends AbstractWikiImporterListenerXDOM
             this.currentPageRevision = new MediaWikiPageRevision(this.currentPage.getLastRevision());
             this.currentPage.addRevision(this.currentPageRevision);
         }
+        this.currentPageRevision.setVersion(null);
+        newXDOMGeneratorListener();
     }
 
     /**
@@ -235,7 +253,17 @@ public class MediaWikiImporterListener extends AbstractWikiImporterListenerXDOM
      */
     public void endWikiPageRevision()
     {
+       try {
+        this.currentPageRevision.setOriginalContent(this.currentMediaWikiContent);
         this.currentPageRevision.setContent(getXDOMGeneratorListener().getXDOM());
+        System.out.println("Success getting revision data for page " + currentPageRevision.getTitle() + " for version " + currentPageRevision.getVersion());
+       } catch(Exception e) {
+        e.printStackTrace();
+        System.out.println("Failed to get revision data for page " + currentPageRevision.getTitle() + " for version " + currentPageRevision.getVersion());
+        List list = this.currentPage.getRevisions();
+        if (list.size()>1)
+            list.remove(this.currentPage.getLastRevision());
+       }
     }
 
     /**
@@ -256,6 +284,7 @@ public class MediaWikiImporterListener extends AbstractWikiImporterListenerXDOM
      */
     public void onProperty(String property, String value)
     {
+        System.out.println("Found property :  " + property + " :" + value);
         if (property.equals(MediaWikiConstants.PAGE_TITLE_TAG)) {
             this.currentPageRevision.setTitle(value);
         } else if (property.equals(MediaWikiConstants.AUTHOR_TAG)) {
@@ -263,7 +292,10 @@ public class MediaWikiImporterListener extends AbstractWikiImporterListenerXDOM
         } else if (property.equals(MediaWikiConstants.COMMENT_TAG)) {
             this.currentPageRevision.setComment(value);
         } else if (property.equals(MediaWikiConstants.VERSION_TAG)) {
-            this.currentPageRevision.setVersion(value);
+            if (this.currentId==null) {
+                this.currentId = value;
+            } else if (this.currentPageRevision.getVersion()==null)
+               this.currentPageRevision.setVersion(value);
         } else if (property.equals(MediaWikiConstants.IS_MINOR_TAG)) {
             this.currentPageRevision.setMinorEdit(Boolean.valueOf(value));
         }
@@ -275,6 +307,7 @@ public class MediaWikiImporterListener extends AbstractWikiImporterListenerXDOM
      * @see org.xwiki.rendering.listener.WrappingListener#endQuotation(java.util.Map)
      */
     // TODO: this should be fixed in the MediaWiki parser itself
+   /*
     public void endQuotation(Map<String, String> parameters)
     {
         QuotationBlock quotationBlock = new QuotationBlock(generateListFromStack(), parameters);
@@ -285,6 +318,7 @@ public class MediaWikiImporterListener extends AbstractWikiImporterListenerXDOM
             getStack().push(quotationBlock);
         }
     }
+   */
 
     /**
      * {@inheritDoc}
@@ -295,10 +329,17 @@ public class MediaWikiImporterListener extends AbstractWikiImporterListenerXDOM
     public void beginLink(ResourceReference reference, boolean isFreeStandingURI, Map<String, String> parameters)
     {
         String linkReference = reference.getReference();
-
+        System.out.println("beginLink with reference: " + linkReference);
         // Convert Categories to Tags.
         if (linkReference.startsWith("Category")) {
-            this.currentPageRevision.addTag(linkReference.split(":")[1]);
+            String[] refData = linkReference.split(":");
+            if (refData.length>1)
+             this.currentPageRevision.addTag(refData[1]);
+            return;
+        }
+
+        if (linkReference.contains("::")) {
+            // we don't know how to treat these links
             return;
         }
 
@@ -306,6 +347,20 @@ public class MediaWikiImporterListener extends AbstractWikiImporterListenerXDOM
         reference = converReference(reference);
 
         super.beginLink(reference, isFreeStandingURI, parameters);
+    }
+
+
+    public void onImage(ResourceReference reference, boolean isFreeStandingURI, Map<String, String> parameters)
+    {
+        System.out.println("Converting image reference: " + reference);
+        ResourceReference xwikiLink =
+            new ResourceReference(reference.getReference(), reference.getType());
+        String resourceName = reference.getReference();
+        resourceName = resourceName.replaceAll(" ", "_");
+        xwikiLink.setReference("image:" + resourceName);
+        beginAttachment(resourceName);
+
+        super.onImage(xwikiLink, isFreeStandingURI, parameters);
     }
 
     /**
@@ -317,9 +372,10 @@ public class MediaWikiImporterListener extends AbstractWikiImporterListenerXDOM
     public void endLink(ResourceReference reference, boolean isFreeStandingURI, Map<String, String> parameters)
     {
         String linkReference = reference.getReference();
+        System.out.println("endLink with reference: " + linkReference);
 
         // Convert Categories to Tags.
-        if (linkReference.startsWith("Category")) {
+        if (linkReference.startsWith("Category")||linkReference.contains("::")) {
             return;
         }
 
@@ -334,6 +390,10 @@ public class MediaWikiImporterListener extends AbstractWikiImporterListenerXDOM
      */
     private ResourceReference converReference(ResourceReference mediaWikiReference)
     {
+      System.out.println("Converting reference: " + mediaWikiReference);
+      try {
+        boolean isImage = false;
+
         // If link reference is a external url
         if (-1 != mediaWikiReference.getReference().indexOf("://")) {
             return mediaWikiReference;
@@ -349,6 +409,14 @@ public class MediaWikiImporterListener extends AbstractWikiImporterListenerXDOM
             return mediaWikiReference;
         }
 
+/*
+        if (mediaWikiReference.getReference().startsWith("Image:")) {
+            System.out.println("Found Image: in reference");
+            isImage = true;
+            mediaWikiReference.setReference(mediaWikiReference.getReference().substring(6));
+        }
+*/
+
         ResourceReference xwikiLink =
             new ResourceReference(mediaWikiReference.getReference(), mediaWikiReference.getType());
 
@@ -362,12 +430,16 @@ public class MediaWikiImporterListener extends AbstractWikiImporterListenerXDOM
                 nameSpace = this.importParams.getTargetSpace();
             }
             String resourceName = parts[1];
-
+            System.out.println("Checking namespace=" + nameSpace + " resource=" + resourceName);
+        
             if (isImage(nameSpace, resourceName)) {
+                resourceName.replaceAll(" ", "_");
+                System.out.println("Found image " + resourceName);
                 xwikiLink.setReference("image:" + resourceName);
                 beginAttachment(resourceName);
 
             } else if (nameSpace.equalsIgnoreCase("media") || nameSpace.equalsIgnoreCase("file")) {
+                System.out.println("Found attachment " + resourceName);
                 xwikiLink.setReference("attach:" + resourceName);
                 beginAttachment(resourceName);
 
@@ -402,7 +474,14 @@ public class MediaWikiImporterListener extends AbstractWikiImporterListenerXDOM
                     xwikiLink.getReference().lastIndexOf('/') + 1)));
         }
 
+        System.out.println("Found link " + xwikiLink.getReference());
+
         return xwikiLink;
+       } catch (Exception e) {
+        System.out.println("Failed to convert reference");
+        e.printStackTrace();
+        return mediaWikiReference;
+       }
     }
 
     /**
@@ -414,6 +493,9 @@ public class MediaWikiImporterListener extends AbstractWikiImporterListenerXDOM
      */
     private boolean isImage(String nameSpace, String fileName)
     {
+        if (nameSpace.equalsIgnoreCase("image"))
+            return true;
+
         int dotIndex = fileName.indexOf('.');
         String[] fileExtensions = {"png", "gif", "jpg", "jpeg", "svg", "tiff", "tif"};
         if ((nameSpace.equalsIgnoreCase("image") || nameSpace.equalsIgnoreCase("file")) && -1 != dotIndex) {
@@ -445,6 +527,7 @@ public class MediaWikiImporterListener extends AbstractWikiImporterListenerXDOM
      */
     public void onMacro(String id, Map<String, String> macroParameters, String content, boolean isInline)
     {
+        System.out.println("Found macro " + id);
         if (id.equals("toc") || id.equals("forcetoc")) {
             macroParameters =
                 macroParameters != null ? new HashMap<String, String>(macroParameters) : new HashMap<String, String>();

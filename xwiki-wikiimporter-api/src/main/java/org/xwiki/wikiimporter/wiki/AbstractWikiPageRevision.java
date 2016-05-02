@@ -49,6 +49,8 @@ public abstract class AbstractWikiPageRevision implements WikiPageRevision
 
     protected XDOM content;
 
+    protected String originalContent;
+
     public AbstractWikiPageRevision()
     {
     }
@@ -63,6 +65,7 @@ public abstract class AbstractWikiPageRevision implements WikiPageRevision
         setMinorEdit(previousWikiPageRevision.isMinorEdit());
         setTags(previousWikiPageRevision.getTags());
         setContent(previousWikiPageRevision.getContent());
+        setOriginalContent(previousWikiPageRevision.getOriginalContent());
     }
 
     public AbstractWikiPageRevision(String title, String author, String comment, String version, boolean minorEdit)
@@ -147,6 +150,16 @@ public abstract class AbstractWikiPageRevision implements WikiPageRevision
     /**
      * {@inheritDoc}
      * 
+     * @see org.xwiki.wikiimporter.wiki.WikiPageRevision#getOriginalContent()
+     */
+    public String getOriginalContent()
+    {
+        return this.originalContent;
+    }
+
+    /**
+     * {@inheritDoc}
+     * 
      * @see org.xwiki.wikiimporter.wiki.WikiPageRevision#getVersion()
      */
     public String getVersion()
@@ -202,6 +215,14 @@ public abstract class AbstractWikiPageRevision implements WikiPageRevision
     public void setContent(XDOM textContent)
     {
         this.content = textContent;
+    }
+
+    /**
+     * @param textContent the textContent to set
+     */
+    public void setOriginalContent(String textContent)
+    {
+        this.originalContent = textContent;
     }
 
     public void addAttachment(Attachment attachment)

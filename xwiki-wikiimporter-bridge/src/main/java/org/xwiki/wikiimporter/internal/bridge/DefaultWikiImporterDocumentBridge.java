@@ -38,6 +38,8 @@ import org.xwiki.wikiimporter.wiki.Attachment;
 import org.xwiki.wikiimporter.wiki.WikiPage;
 import org.xwiki.wikiimporter.wiki.WikiPageRevision;
 
+import java.util.ArrayList;
+
 /**
  * Default Implementation for WikiImporterDocumentBridge.
  * 
@@ -118,19 +120,28 @@ public class DefaultWikiImporterDocumentBridge extends AbstractLogEnabled implem
         String stringReference = this.serializer.serialize(documentReference);
 
         try {
+            System.out.println("Attachments: " + page.getAttachments().size());
+            ArrayList attachList = new ArrayList();
+
             // Attachments
             for (Attachment attachment : page.getAttachments()) {
+                if (attachList.contains(attachment.getFileName()))
+                    continue;
+                attachList.add(attachment.getFileName());
                 AttachmentReference attachmentRef =
                     new AttachmentReference(attachment.getFileName(), documentReference);
+                System.out.println("Adding attachment to page " + page.getName() + ": " + attachment.getFileName());
                 this.docAccessBridge.setAttachmentContent(attachmentRef, attachment.getContent());
             }
 
             if (parameters.getPreserveHistory()) {
+                System.out.println("Adding all revisions of page " + page.getName());
                 // For each wiki page revision render xdom and set page content.
                 for (WikiPageRevision revision : page.getRevisions()) {
                     addRevision(documentReference, revision);
                 }
             } else {
+                System.out.println("Adding last revision of page " + page.getName() + ": " + page.getLastRevision().getVersion());
                 addRevision(documentReference, page.getLastRevision());
             }
         } catch (Exception e) {
@@ -138,6 +149,8 @@ public class DefaultWikiImporterDocumentBridge extends AbstractLogEnabled implem
             throw new WikiImporterException("Error while creating the sucessfully parsed page.", e);
         }
 
+        System.out.println("Page created " + stringReference);
+      
         // On successful page creation
         this.logger.info(
             "Page Created ->  <a href=\"" + this.docAccessBridge.getDocumentURL(documentReference, "view", "", "")
@@ -150,9 +163,17 @@ public class DefaultWikiImporterDocumentBridge extends AbstractLogEnabled implem
 
         // Document Content
         DefaultWikiPrinter printer = new DefaultWikiPrinter();
+        try {
         this.renderer.render(revision.getContent(), printer);
         this.docAccessBridge.setDocumentContent(documentReference, printer.toString(), revision.getComment(),
             revision.isMinorEdit());
+        } catch (Exception e) {
+        System.out.println("Failed to render revision " + revision.getTitle() + " for version " + revision.getVersion());
+        this.docAccessBridge.setDocumentContent(documentReference, "FAILED ORIGINAL CONTENT: \n\n" + revision.getOriginalContent(), revision.getComment(),
+            revision.isMinorEdit());       
+        this.docAccessBridge.setDocumentSyntaxId(documentReference, "plain/1.0");
+         e.printStackTrace();
+        }
 
         // Document Title
         if (revision.getTitle() != null) {
@@ -161,6 +182,7 @@ public class DefaultWikiImporterDocumentBridge extends AbstractLogEnabled implem
 
         // Document Parent
         if (revision.getParent() != null) {
+            System.out.println("Setting parent: " + revision.getParent());
             DocumentReference parentReference = this.resolver.resolve(revision.getParent(), documentReference);
             this.docAccessBridge.setDocumentParentReference(documentReference, parentReference);
         }

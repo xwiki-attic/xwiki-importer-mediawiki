@@ -42,14 +42,14 @@ public class MediaWikiConstants
 
     public final static String IS_MINOR_TAG = "minor";
 
-    public final static String VERSION_TAG = "version";
+    public final static String VERSION_TAG = "id";
 
     public final static String COMMENT_TAG = "comment";
 
     public final static String TEXT_CONTENT_TAG = "text";
 
     public final static List<String> MW_PROPERTIES = new ArrayList<String>(Arrays.asList(PAGE_TITLE_TAG, AUTHOR_TAG,
-        COMMENT_TAG, IS_MINOR_TAG, TIMESTAMP_TAG));
+        COMMENT_TAG, IS_MINOR_TAG, TIMESTAMP_TAG, VERSION_TAG));
 
     public static String convertPageName(String mediaWikiPageName)
     {

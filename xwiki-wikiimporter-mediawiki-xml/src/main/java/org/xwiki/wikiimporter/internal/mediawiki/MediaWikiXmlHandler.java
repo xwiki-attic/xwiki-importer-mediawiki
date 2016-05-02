@@ -30,6 +30,7 @@ import org.xwiki.component.manager.ComponentManager;
 import org.xwiki.rendering.parser.StreamParser;
 import org.xwiki.rendering.renderer.PrintRendererFactory;
 import org.xwiki.wikiimporter.listener.WikiImporterListener;
+import org.xwiki.wikiimporter.internal.mediawiki.MediaWikiImporterListener;
 
 /**
  * Call back events for MediaWiki XML parser ( SAX Parser ).
@@ -38,7 +39,7 @@ import org.xwiki.wikiimporter.listener.WikiImporterListener;
  */
 public class MediaWikiXmlHandler extends DefaultHandler
 {
-    private WikiImporterListener listener;
+    private MediaWikiImporterListener listener;
 
     private Stack<String> currElement = new Stack<String>();
 
@@ -48,7 +49,7 @@ public class MediaWikiXmlHandler extends DefaultHandler
 
     private StreamParser mediawikiParser;
 
-    public MediaWikiXmlHandler(ComponentManager componentManager, WikiImporterListener listener)
+    public MediaWikiXmlHandler(ComponentManager componentManager, MediaWikiImporterListener listener)
         throws ComponentLookupException
     {
         this.mediawikiParser = componentManager.lookup(StreamParser.class, "mediawiki/1.0");
@@ -104,7 +105,9 @@ public class MediaWikiXmlHandler extends DefaultHandler
             try {
                 this.parseText(strBuf);
             } catch (Exception e) {
-                // Do Nothing.
+                System.out.println("Failed to parse MediaWiki content " + localName);
+                System.out.println(strBuf.toString());
+                e.printStackTrace();
             }
             this.currElement.pop();
         }
@@ -119,7 +122,9 @@ public class MediaWikiXmlHandler extends DefaultHandler
     private void parseText(StringBuilder str) throws MediaWikiImporterException
     {
         try {
-            this.mediawikiParser.parse(new StringReader(str.toString()), listener);
+            String currentMediaWikiContent = str.toString();
+            this.listener.setCurrentMediaWikiContent(currentMediaWikiContent);
+            this.mediawikiParser.parse(new StringReader(currentMediaWikiContent), listener);
         } catch (Exception e) {
             throw new MediaWikiImporterException("Unable to parse page content", e);
         }

@@ -62,6 +62,11 @@ public interface WikiPageRevision
     public XDOM getContent();
 
     /**
+     * @return the original text content of Page revision.
+     */
+    public String getOriginalContent();
+
+    /**
      * @return the comment on Page revision.
      */
     public String getComment();
