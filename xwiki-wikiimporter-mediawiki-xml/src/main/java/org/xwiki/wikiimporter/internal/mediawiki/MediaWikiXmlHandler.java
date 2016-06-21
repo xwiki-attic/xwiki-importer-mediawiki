@@ -29,8 +29,6 @@ import org.xwiki.component.manager.ComponentLookupException;
 import org.xwiki.component.manager.ComponentManager;
 import org.xwiki.rendering.parser.StreamParser;
 import org.xwiki.rendering.renderer.PrintRendererFactory;
-import org.xwiki.wikiimporter.listener.WikiImporterListener;
-import org.xwiki.wikiimporter.internal.mediawiki.MediaWikiImporterListener;
 
 /**
  * Call back events for MediaWiki XML parser ( SAX Parser ).
